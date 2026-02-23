@@ -1,8 +1,8 @@
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials
+import os
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate("app/core/firebase_key.json")
-    firebase_admin.initialize_app(cred)
+cred_path = "/etc/secrets/firebase_key.json"
 
-db = firestore.client()
+cred = credentials.Certificate(cred_path)
+firebase_admin.initialize_app(cred)
