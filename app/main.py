@@ -1,75 +1,70 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from app.core.database import engine, SessionLocal
-from app.models.report import ScamReport
-from app.services.detector import detect_scam  # your existing logic
-from sqlalchemy.sql import func
-from app.core.database import Base
-
-Base.metadata.create_all(bind=engine)
+from typing import Optional, List
+from database import SessionLocal, engine, get_db
+from models import Base, ScamReport
+from datetime import datetime
 
 app = FastAPI()
 
-
-# -------------------------
-# DB Dependency
-# -------------------------
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 
-# -------------------------
-# Request Schema
-# -------------------------
-class MessageRequest(BaseModel):
-    message: str
+# -----------------------------
+# Scam Detection Logic
+# -----------------------------
+def detect_scam(message: str):
+    scam_keywords = ["win", "lottery", "prize", "otp", "urgent", "money"]
+
+    message_lower = message.lower()
+    score = 0
+
+    for word in scam_keywords:
+        if word in message_lower:
+            score += 1
+
+    if score > 0:
+        return "SCAM", score
+    else:
+        return "SAFE", score
 
 
-# -------------------------
-# Analyze Scam + Save
-# -------------------------
+# -----------------------------
+# Analyze Endpoint
+# -----------------------------
 @app.post("/analyze")
-def analyze_message(request: MessageRequest, db: Session = Depends(get_db)):
+def analyze_message(message: str, db: Session = Depends(get_db)):
 
-    # Run your scam detection logic
-    result = detect_scam(request.message)
+    label, score = detect_scam(message)
 
-    # Save to PostgreSQL
     new_report = ScamReport(
-        message=request.message,
-        label=result["label"],
-        score=result["score"]
+        message=message,
+        label=label,
+        score=score,
+        created_at=datetime.utcnow()
     )
 
     db.add(new_report)
     db.commit()
     db.refresh(new_report)
 
-    return {
-        "id": new_report.id,
-        "message": new_report.message,
-        "label": new_report.label,
-        "score": new_report.score,
-        "created_at": new_report.created_at
-    }
+    return new_report
 
 
-# -------------------------
-# Get All Reports
-# -------------------------
+# -----------------------------
+# Reports Endpoint (WITH FILTER)
+# -----------------------------
 @app.get("/reports")
-def get_reports(db: Session = Depends(get_db)):
-    return db.query(ScamReport).all()
+def get_reports(
+    label: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    query = db.query(ScamReport)
 
+    if label:
+        query = query.filter(ScamReport.label == label)
 
-# -------------------------
-# Health
-# -------------------------
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
+    reports = query.order_by(ScamReport.created_at.desc()).all()
+
+    return reports
