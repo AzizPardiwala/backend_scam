@@ -1,17 +1,44 @@
 from fastapi import FastAPI
-from app.core.database import engine, Base
-from app.models import report
+from pydantic import BaseModel
+from datetime import datetime
 
 app = FastAPI()
 
-Base.metadata.create_all(bind=engine)
+
+# -----------------------------
+# Request Model
+# -----------------------------
+class ReportCreate(BaseModel):
+    title: str
+    description: str
 
 
+# -----------------------------
+# Root GET
+# -----------------------------
 @app.get("/")
-def root():
-    return {"message": "Backend is running"}
+def read_root():
+    return {
+        "message": "Backend is running successfully 🚀",
+        "timestamp": datetime.utcnow()
+    }
 
 
+# -----------------------------
+# Root POST
+# -----------------------------
+@app.post("/")
+def create_report(report: ReportCreate):
+    return {
+        "message": "Report received successfully ✅",
+        "data": report,
+        "created_at": datetime.utcnow()
+    }
+
+
+# -----------------------------
+# Health Check
+# -----------------------------
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health_check():
+    return {"status": "healthy"}
