@@ -1,11 +1,13 @@
 from fastapi import FastAPI
-from app.routes import scam
+from app.core.database import engine, Base
+from app.models import report  # Important for table creation
 
-app = FastAPI(title="Scam Detection API")
+app = FastAPI()
 
-app.include_router(scam.router)
+# Create tables in PostgreSQL
+Base.metadata.create_all(bind=engine)
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@app.get("/")
+def root():
+    return {"message": "Backend is running"}

@@ -1,32 +1,40 @@
-# This is rule-based detection (Stage 1)
-# Later we replace with ML model.
+import re
 
-SCAM_KEYWORDS = [
-    "lottery",
-    "winner",
-    "free money",
-    "click this link",
-    "urgent",
-    "account suspended",
-    "send otp",
-    "verify now",
+SCAM_PATTERNS = [
+    r"lottery",
+    r"won\s+\₹?\d+",
+    r"claim\s+now",
+    r"urgent",
+    r"immediately",
+    r"account\s+blocked",
+    r"verify\s+otp",
+    r"click\s+this\s+link",
+    r"work\s+from\s+home",
+    r"registration\s+fee",
+    r"pay\s+\₹?\d+",
+    r"guaranteed\s+income",
+    r"limited\s+offer",
+    r"free\s+gift",
 ]
-
 
 def detect_scam(message: str):
     message_lower = message.lower()
 
-    matched = [word for word in SCAM_KEYWORDS if word in message_lower]
+    score = 0
+    matches = []
 
-    if matched:
-        return {
-            "is_scam": True,
-            "confidence": min(0.5 + len(matched) * 0.1, 0.95),
-            "reason": f"Detected suspicious keywords: {', '.join(matched)}",
-        }
+    for pattern in SCAM_PATTERNS:
+        if re.search(pattern, message_lower):
+            score += 1
+            matches.append(pattern)
+
+    if score >= 2:
+        label = "SCAM"
+    else:
+        label = "SAFE"
 
     return {
-        "is_scam": False,
-        "confidence": 0.2,
-        "reason": "No scam indicators detected",
+        "label": label,
+        "score": score,
+        "matched_rules": matches
     }
