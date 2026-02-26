@@ -1,44 +1,75 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from datetime import datetime
+from app.core.database import engine, SessionLocal
+from app.models.report import ScamReport
+from app.services.detector import detect_scam  # your existing logic
+from sqlalchemy.sql import func
+from app.core.database import Base
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-# -----------------------------
-# Request Model
-# -----------------------------
-class ReportCreate(BaseModel):
-    title: str
-    description: str
+# -------------------------
+# DB Dependency
+# -------------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-# -----------------------------
-# Root GET
-# -----------------------------
-@app.get("/")
-def read_root():
+# -------------------------
+# Request Schema
+# -------------------------
+class MessageRequest(BaseModel):
+    message: str
+
+
+# -------------------------
+# Analyze Scam + Save
+# -------------------------
+@app.post("/analyze")
+def analyze_message(request: MessageRequest, db: Session = Depends(get_db)):
+
+    # Run your scam detection logic
+    result = detect_scam(request.message)
+
+    # Save to PostgreSQL
+    new_report = ScamReport(
+        message=request.message,
+        label=result["label"],
+        score=result["score"]
+    )
+
+    db.add(new_report)
+    db.commit()
+    db.refresh(new_report)
+
     return {
-        "message": "Backend is running successfully 🚀",
-        "timestamp": datetime.utcnow()
+        "id": new_report.id,
+        "message": new_report.message,
+        "label": new_report.label,
+        "score": new_report.score,
+        "created_at": new_report.created_at
     }
 
 
-# -----------------------------
-# Root POST
-# -----------------------------
-@app.post("/")
-def create_report(report: ReportCreate):
-    return {
-        "message": "Report received successfully ✅",
-        "data": report,
-        "created_at": datetime.utcnow()
-    }
+# -------------------------
+# Get All Reports
+# -------------------------
+@app.get("/reports")
+def get_reports(db: Session = Depends(get_db)):
+    return db.query(ScamReport).all()
 
 
-# -----------------------------
-# Health Check
-# -----------------------------
+# -------------------------
+# Health
+# -------------------------
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "healthy"}
