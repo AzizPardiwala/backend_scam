@@ -1,10 +1,15 @@
 from pydantic import BaseModel
+from datetime import datetime
 
-class ScamRequest(BaseModel):
+class ScamReportCreate(BaseModel):
     message: str
 
+class ScamReportResponse(BaseModel):
+    id: int
+    message: str
+    label: str
+    score: int
+    created_at: datetime
 
-class ScamResponse(BaseModel):
-    is_scam: bool
-    confidence: float
-    explanation: str
+    class Config:
+        from_attributes = True

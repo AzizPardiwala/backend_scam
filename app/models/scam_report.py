@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime, timezone
 from app.core.database import Base
 
 
@@ -6,6 +7,10 @@ class ScamReport(Base):
     __tablename__ = "scam_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    message = Column(Text, nullable=False)
-    source = Column(String, nullable=False)
-    status = Column(String, default="pending")
+    message = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    score = Column(Integer, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
+    )
