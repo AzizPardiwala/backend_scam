@@ -1,37 +1,31 @@
 import re
+from datetime import datetime, timezone
 
 SCAM_PATTERNS = [
     r"lottery",
-    r"won\s+\₹?\d+",
-    r"claim\s+now",
+    r"win money",
+    r"claim now",
     r"urgent",
-    r"immediately",
-    r"account\s+blocked",
-    r"verify\s+otp",
-    r"click\s+this\s+link",
-    r"work\s+from\s+home",
-    r"registration\s+fee",
-    r"pay\s+\₹?\d+",
-    r"guaranteed\s+income",
-    r"limited\s+offer",
-    r"free\s+gift",
+    r"account blocked",
+    r"verify your account",
+    r"click this link",
 ]
 
 def detect_scam(message: str):
     message_lower = message.lower()
-
     score = 0
-    matches = []
+    matched_rules = []
 
     for pattern in SCAM_PATTERNS:
         if re.search(pattern, message_lower):
             score += 1
-            matches.append(pattern)
+            matched_rules.append(pattern)
 
     label = "SCAM" if score >= 2 else "SAFE"
 
     return {
         "label": label,
         "score": score,
-        "matched_rules": matches
+        "matched_rules": matched_rules,
+        "analyzed_at": datetime.now(timezone.utc).isoformat()
     }
