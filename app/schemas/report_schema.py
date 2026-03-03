@@ -1,14 +1,14 @@
 from pydantic import BaseModel
 from datetime import datetime
 
-class ScamReportCreate(BaseModel):
+class ReportCreate(BaseModel):
     message: str
 
-class ScamReportResponse(BaseModel):
+class ReportResponse(BaseModel):
     id: int
     message: str
     label: str
-    score: int
+    confidence: float
     created_at: datetime
 
     class Config:
