@@ -1,31 +1,47 @@
-import re
+import pickle
+import os
 
-SCAM_PATTERNS = [
-    r"lottery",
-    r"win money",
-    r"urgent",
-    r"account blocked",
-    r"verify now",
-    r"click here",
-    r"bank otp",
-    r"free gift"
-]
+# Load model + vectorizer
+model_path = os.path.join("app", "ai", "model.pkl")
+vectorizer_path = os.path.join("app", "ai", "vectorizer.pkl")
+
+with open(model_path, "rb") as f:
+    model = pickle.load(f)
+
+with open(vectorizer_path, "rb") as f:
+    vectorizer = pickle.load(f)
+
 
 def detect_scam(message: str):
-    message_lower = message.lower()
-    score = 0
-    matched = []
 
-    for pattern in SCAM_PATTERNS:
-        if re.search(pattern, message_lower):
-            score += 1
-            matched.append(pattern)
+    text = message.lower()
 
-    confidence = min(score / len(SCAM_PATTERNS), 1.0) * 100
-    label = "SCAM" if score >= 2 else "SAFE"
+    # ===============================
+    # 1. RULE-BASED DETECTION (STRONG)
+    # ===============================
+
+    scam_keywords = [
+        "win", "won", "prize", "lottery", "click here",
+        "free", "urgent", "verify", "kyc", "otp",
+        "account blocked", "bank", "upi", "cashback",
+        "₹", "reward", "gift", "claim"
+    ]
+
+    if any(word in text for word in scam_keywords):
+        return {
+            "label": "SCAM",
+            "confidence": 0.95
+        }
+
+    # ===============================
+    # 2. ML MODEL
+    # ===============================
+
+    vectorized = vectorizer.transform([message])
+    prediction = model.predict(vectorized)[0]
+    prob = model.predict_proba(vectorized).max()
 
     return {
-        "label": label,
-        "confidence": round(confidence, 2),
-        "matched": matched
+        "label": prediction,
+        "confidence": float(prob)
     }
