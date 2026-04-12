@@ -1,24 +1,8 @@
 from fastapi import FastAPI
-from app.core.database import engine, Base
-from app.routes import health, scam
-from app.models import report  # VERY IMPORTANT (registers model)
+from app.routes import health, scam, report   # ✅ add report
 
-app = FastAPI(
-    title="Scam Detection API",
-    version="0.1.0"
-)
+app = FastAPI(title="Scam Alert API 🚨")
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
-# Include routers
-app.include_router(health.router)
-app.include_router(scam.router)
-
-# Root endpoint (required for Render health check)
-@app.get("/")
-def root():
-    return {
-        "status": "running",
-        "message": "Scam Detection API is live"
-    }
+app.include_router(health.router, prefix="/health", tags=["Health"])
+app.include_router(scam.router, prefix="/scam", tags=["Scam Detection"])
+app.include_router(report.router, prefix="/reports", tags=["Reports"])  # ✅
