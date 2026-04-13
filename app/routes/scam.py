@@ -1,28 +1,36 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.services.scam_detector import detect_scam
 from app.schemas.report_schema import ReportCreate, ReportResponse
-from app.routes.report import reports_db   # ✅ important
+from app.models.report import Report
+from app.core.database import SessionLocal
 
 router = APIRouter()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 @router.post("/detect", response_model=ReportResponse)
-def detect(message: ReportCreate):
+def detect(data: ReportCreate, db: Session = Depends(get_db)):
+    result = detect_scam(data.message)
 
-    result = detect_scam(message.message)
+    report = Report(
+        message=data.message,
+        label=result["label"],
+        confidence=result["confidence"],
+        reason=result["reason"],
+        type=result["type"],
+        created_at=datetime.utcnow()
+    )
 
-    response = {
-        "id": int(datetime.now().timestamp()),
-        "message": message.message,
-        "label": result["label"],
-        "confidence": result["confidence"],
-        "reason": result["reason"],
-        "type": result["type"],
-        "created_at": datetime.now()
-    }
+    db.add(report)
+    db.commit()
+    db.refresh(report)
 
-    # ✅ SAVE TO REPORTS
-    reports_db.append(response)
-
-    return response
+    return report

@@ -12,3 +12,6 @@ class ReportResponse(BaseModel):
     reason: str
     type: str
     created_at: datetime
+
+    class Config:
+        from_attributes = True

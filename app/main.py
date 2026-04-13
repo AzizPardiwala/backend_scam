@@ -1,8 +1,13 @@
 from fastapi import FastAPI
-from app.routes import health, scam, report   # ✅ add report
+from app.core.database import Base, engine
 
-app = FastAPI(title="Scam Alert API 🚨")
+from app.routes import auth, scam, report, health
 
-app.include_router(health.router, prefix="/health", tags=["Health"])
-app.include_router(scam.router, prefix="/scam", tags=["Scam Detection"])
-app.include_router(report.router, prefix="/reports", tags=["Reports"])  # ✅
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="Scam Detection API 🚀")
+
+app.include_router(auth.router, prefix="/auth")
+app.include_router(scam.router, prefix="/scam")
+app.include_router(report.router, prefix="/reports")
+app.include_router(health.router, prefix="/health")

@@ -1,24 +1,14 @@
-from fastapi import APIRouter
-from typing import List
-from app.schemas.report_schema import ReportResponse
+from sqlalchemy import Column, Integer, String, Float, DateTime
+from datetime import datetime
+from app.core.database import Base
 
-router = APIRouter()
+class Report(Base):
+    __tablename__ = "reports"
 
-reports_db = []
-
-@router.get("/", response_model=List[ReportResponse])
-def get_reports():
-    return reports_db
-
-@router.get("/{report_id}", response_model=ReportResponse)
-def get_report(report_id: int):
-    for r in reports_db:
-        if r["id"] == report_id:
-            return r
-    return {"error": "Report not found"}
-
-@router.delete("/{report_id}")
-def delete_report(report_id: int):
-    global reports_db
-    reports_db = [r for r in reports_db if r["id"] != report_id]
-    return {"message": "Deleted"}
+    id = Column(Integer, primary_key=True, index=True)
+    message = Column(String)
+    label = Column(String)
+    confidence = Column(Float)
+    reason = Column(String)
+    type = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)

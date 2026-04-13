@@ -1,43 +1,41 @@
-import pickle
 import re
+import pickle
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-model_path = os.path.join(BASE_DIR, "ai", "model.pkl")
-vectorizer_path = os.path.join(BASE_DIR, "ai", "vectorizer.pkl")
-
-model = pickle.load(open(model_path, "rb"))
-vectorizer = pickle.load(open(vectorizer_path, "rb"))
+model = pickle.load(open(os.path.join(BASE_DIR, "ai/model.pkl"), "rb"))
+vectorizer = pickle.load(open(os.path.join(BASE_DIR, "ai/vectorizer.pkl"), "rb"))
 
 def detect_scam(message: str):
-
     text = message.lower()
 
-    scam_keywords = {
-        "lottery": ["win", "won", "prize", "lottery", "reward"],
-        "phishing": ["verify", "kyc", "account blocked", "bank", "upi"],
-        "otp fraud": ["otp", "urgent", "do not share"],
-        "clickbait": ["click here", "free", "gift", "cashback"]
-    }
+    # 🔗 phishing detection
+    if "http" in text or "www" in text:
+        if "bit.ly" in text or "tinyurl" in text:
+            return {
+                "label": "SCAM",
+                "confidence": 0.97,
+                "reason": "Suspicious shortened URL",
+                "type": "phishing"
+            }
 
-    for scam_type, keywords in scam_keywords.items():
-        for word in keywords:
-            if re.search(rf"\b{re.escape(word)}\b", text):
-                return {
-                    "label": "SCAM",
-                    "confidence": 0.95,
-                    "reason": f"Detected keyword '{word}' related to {scam_type}",
-                    "type": scam_type
-                }
+    # 🔥 keywords
+    if any(word in text for word in ["win", "prize", "lottery"]):
+        return {
+            "label": "SCAM",
+            "confidence": 0.95,
+            "reason": "Lottery keywords detected",
+            "type": "lottery"
+        }
 
-    vectorized = vectorizer.transform([message])
-    prediction = model.predict(vectorized)[0]
-    prob = model.predict_proba(vectorized).max()
+    vec = vectorizer.transform([message])
+    pred = model.predict(vec)[0]
+    prob = model.predict_proba(vec).max()
 
     return {
-        "label": prediction,
+        "label": pred,
         "confidence": float(prob),
-        "reason": "Predicted using ML model",
+        "reason": "ML prediction",
         "type": "unknown"
     }
