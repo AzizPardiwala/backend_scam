@@ -3,6 +3,7 @@ from app.core.database import Base, engine
 
 from app.routes import auth, scam, report, health
 
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Scam Detection API 🚀")
