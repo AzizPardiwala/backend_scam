@@ -1,11 +1,15 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./scam.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Fix for Render PostgreSQL
+# 🔥 ADD THIS LINE HERE
+print("DATABASE_URL:", DATABASE_URL)
+
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./scam.db"
+
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
 
