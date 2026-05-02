@@ -1,41 +1,27 @@
-import re
-import pickle
 import os
+import pickle
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-model = pickle.load(open(os.path.join(BASE_DIR, "ai/model.pkl"), "rb"))
-vectorizer = pickle.load(open(os.path.join(BASE_DIR, "ai/vectorizer.pkl"), "rb"))
+model_path = os.path.join(BASE_DIR, "ai/model.pkl")
+vectorizer_path = os.path.join(BASE_DIR, "ai/vectorizer.pkl")
+
+model = pickle.load(open(model_path, "rb"))
+vectorizer = pickle.load(open(vectorizer_path, "rb"))
+
 
 def detect_scam(message: str):
-    text = message.lower()
+    vectorized = vectorizer.transform([message])
 
-    # 🔗 phishing detection
-    if "http" in text or "www" in text:
-        if "bit.ly" in text or "tinyurl" in text:
-            return {
-                "label": "SCAM",
-                "confidence": 0.97,
-                "reason": "Suspicious shortened URL",
-                "type": "phishing"
-            }
+    prediction = model.predict(vectorized)[0]
 
-    # 🔥 keywords
-    if any(word in text for word in ["win", "prize", "lottery"]):
-        return {
-            "label": "SCAM",
-            "confidence": 0.95,
-            "reason": "Lottery keywords detected",
-            "type": "lottery"
-        }
-
-    vec = vectorizer.transform([message])
-    pred = model.predict(vec)[0]
-    prob = model.predict_proba(vec).max()
+    # Confidence (if available)
+    try:
+        confidence = max(model.predict_proba(vectorized)[0])
+    except:
+        confidence = 0.9
 
     return {
-        "label": pred,
-        "confidence": float(prob),
-        "reason": "ML prediction",
-        "type": "unknown"
+        "prediction": str(prediction),
+        "confidence": float(confidence)
     }

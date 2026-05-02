@@ -1,14 +1,46 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.database import Base, engine
 
-from app.routes import auth, scam, report, health
+# Routers
+from app.routes import auth, scam, reports, user
 
+# Create app
+app = FastAPI(
+    title="Scam Detection API 🚀",
+    version="1.0.0"
+)
 
+# ✅ CORS (important for frontend later)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ⚠️ change in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ✅ Create DB tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Scam Detection API 🚀")
+# ✅ Include Routes
+app.include_router(auth.router)
+app.include_router(scam.router)
+app.include_router(reports.router)
+app.include_router(user.router)
 
-app.include_router(auth.router, prefix="/auth")
-app.include_router(scam.router, prefix="/scam")
-app.include_router(report.router, prefix="/reports")
-app.include_router(health.router, prefix="/health")
+
+# ✅ Root API
+@app.get("/")
+def root():
+    return {
+        "message": "Scam Detection API Running 🚀",
+        "docs": "/docs"
+    }
+
+
+# ✅ Health check (important for Render)
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
