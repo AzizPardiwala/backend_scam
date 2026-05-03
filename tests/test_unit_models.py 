@@ -1,0 +1,119 @@
+"""
+UNIT TESTS — Database Models (uses SQLite test DB)
+Tests: User and ScamReport model creation, defaults, constraints
+"""
+import pytest
+from app.models.user import User
+from app.models.scam_report import ScamReport
+from app.core.security import hash_password
+
+
+class TestUserModel:
+
+    def test_create_user(self, db):
+        user = User(
+            email="test@example.com",
+            password=hash_password("pass"),
+            name="Test",
+            role="user"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        assert user.id is not None
+        assert user.email == "test@example.com"
+        assert user.name == "Test"
+
+    def test_default_role_is_user(self, db):
+        user = User(email="a@b.com", password="x", name="A")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        assert user.role == "user"
+
+    def test_default_is_active_true(self, db):
+        user = User(email="c@d.com", password="x", name="C")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        assert user.is_active is True
+
+    def test_created_at_auto_set(self, db):
+        user = User(email="e@f.com", password="x", name="E")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        assert user.created_at is not None
+
+    def test_duplicate_email_raises(self, db):
+        from sqlalchemy.exc import IntegrityError
+        db.add(User(email="dup@test.com", password="x", name="A"))
+        db.commit()
+        db.add(User(email="dup@test.com", password="x", name="B"))
+        with pytest.raises(IntegrityError):
+            db.commit()
+
+    def test_admin_role(self, db):
+        user = User(email="admin@test.com", password="x", name="Admin", role="admin")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        assert user.role == "admin"
+
+
+class TestScamReportModel:
+
+    def test_create_report(self, db, regular_user):
+        report = ScamReport(
+            user_id=regular_user.id,
+            message="Test scam message",
+            status="PENDING"
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        assert report.id is not None
+        assert report.message == "Test scam message"
+        assert report.user_id == regular_user.id
+
+    def test_default_status_is_pending(self, db, regular_user):
+        report = ScamReport(user_id=regular_user.id, message="test")
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        assert report.status == "PENDING"
+
+    def test_optional_fields_are_none_by_default(self, db, regular_user):
+        report = ScamReport(user_id=regular_user.id, message="test")
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        assert report.prediction is None
+        assert report.confidence is None
+        assert report.scam_type is None
+        assert report.risk_score is None
+        assert report.reason is None
+
+    def test_created_at_auto_set(self, db, regular_user):
+        report = ScamReport(user_id=regular_user.id, message="test")
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        assert report.created_at is not None
+
+    def test_update_report_fields(self, db, sample_report):
+        sample_report.prediction = "SCAM"
+        sample_report.confidence = 0.91
+        sample_report.scam_type = "LOTTERY_SCAM"
+        sample_report.risk_score = 9
+        sample_report.status = "VERIFIED"
+        db.commit()
+        db.refresh(sample_report)
+
+        assert sample_report.prediction == "SCAM"
+        assert sample_report.confidence == 0.91
+        assert sample_report.status == "VERIFIED"
+
+    

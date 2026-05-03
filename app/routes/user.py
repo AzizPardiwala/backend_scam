@@ -21,7 +21,8 @@ def update_user(
 ):
     user.name = name
     db.commit()
-    return {"message": "User updated"}
+    db.refresh(user)
+    return {"id": user.id, "email": user.email, "name": user.name, "role": user.role, "is_active": user.is_active, "created_at": user.created_at}
 
 
 # ✅ Delete user (soft delete)
