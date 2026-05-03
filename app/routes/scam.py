@@ -1,64 +1,99 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db, SessionLocal
 from app.models.scam_report import ScamReport
 from app.core.deps import get_current_user
-from app.services.background_tasks import process_scam
+from app.schemas.report_schema import ReportCreate, ReportUpdate, ReportResponse
+from app.services.background_tasks import process_scam_report
+from typing import List
 
 router = APIRouter(prefix="/scam", tags=["Scam"])
 
 
-# 🔥 POST: User submits scam
-@router.post("/detect")
-async def detect_scam(
-    message: str,
+@router.post("/report", response_model=ReportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def submit_report(
+    data: ReportCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    scam = ScamReport(
-        message=message,
-        user_id=user.id,
-        status="PENDING"
-    )
-
+    """Submit a scam report. Saves instantly (sync), AI runs in background (async)."""
+    scam = ScamReport(user_id=user.id, message=data.message, status="PENDING")
     db.add(scam)
     db.commit()
     db.refresh(scam)
 
-    # Run ML in background
-    new_db = SessionLocal()
-    background_tasks.add_task(process_scam, new_db, scam.id, message)
-
-    return {
-        "id": scam.id,
-        "status": "Processing"
-    }
+    bg_db = SessionLocal()
+    background_tasks.add_task(process_scam_report, bg_db, scam.id, data.message)
+    return scam
 
 
-# 🔍 GET: Search scams (public)
-@router.get("/search")
+@router.get("/my-reports", response_model=List[ReportResponse])
+def get_my_reports(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Get all reports by the logged-in user."""
+    return db.query(ScamReport).filter(
+        ScamReport.user_id == user.id
+    ).order_by(ScamReport.created_at.desc()).all()
+
+
+@router.get("/search/query", response_model=List[ReportResponse])
 def search_scams(q: str, db: Session = Depends(get_db)):
-    scams = db.query(ScamReport).filter(
-        ScamReport.message.ilike(f"%{q}%")
-    ).all()
+    """Public search across verified scam reports."""
+    return db.query(ScamReport).filter(
+        ScamReport.message.ilike(f"%{q}%"),
+        ScamReport.status == "VERIFIED"
+    ).order_by(ScamReport.created_at.desc()).limit(50).all()
 
-    return scams
+
+@router.get("/{report_id}", response_model=ReportResponse)
+def get_report(report_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Get a specific report (only owner can view)."""
+    scam = db.query(ScamReport).filter(
+        ScamReport.id == report_id, ScamReport.user_id == user.id
+    ).first()
+    if not scam:
+        raise HTTPException(status_code=404, detail="Report not found or access denied")
+    return scam
 
 
-# ⚡ POST: Admin verify manually (optional advanced API)
-@router.post("/{id}/verify")
-def verify_scam(
-    id: int,
+@router.put("/{report_id}", response_model=ReportResponse)
+async def update_report(
+    report_id: int,
+    data: ReportUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    scam = db.query(ScamReport).filter(ScamReport.id == id).first()
-
+    """Update a report and re-run AI analysis."""
+    scam = db.query(ScamReport).filter(
+        ScamReport.id == report_id, ScamReport.user_id == user.id
+    ).first()
     if not scam:
-        return {"error": "Not found"}
+        raise HTTPException(status_code=404, detail="Report not found or access denied")
 
-    scam.status = "VERIFIED"
+    scam.message = data.message
+    scam.status = "PENDING"
+    scam.prediction = None
+    scam.confidence = None
+    scam.scam_type = None
+    scam.risk_score = None
+    scam.reason = None
     db.commit()
+    db.refresh(scam)
 
-    return {"message": "Verified manually"}
+    bg_db = SessionLocal()
+    background_tasks.add_task(process_scam_report, bg_db, scam.id, data.message)
+    return scam
+
+
+@router.delete("/{report_id}")
+def delete_report(report_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Delete own report."""
+    scam = db.query(ScamReport).filter(
+        ScamReport.id == report_id, ScamReport.user_id == user.id
+    ).first()
+    if not scam:
+        raise HTTPException(status_code=404, detail="Report not found or access denied")
+    db.delete(scam)
+    db.commit()
+    return {"message": f"Report {report_id} deleted successfully"}
