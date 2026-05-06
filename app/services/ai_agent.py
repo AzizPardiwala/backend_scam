@@ -27,21 +27,24 @@ Return ONLY valid JSON — no markdown, no extra text:
 {
   "scam_type": "TYPE",
   "risk_score": 1-10,
-  "reason": "one sentence explanation"
+  "reason": "one sentence explaining why this is a scam",
+  "recommendation": "one sentence telling the user what to do"
 }
 """
 
 
 def classify_scam(description: str) -> dict:
     """
-    SYNCHRONOUS Gemini classification.
-    Returns dict with scam_type, risk_score, reason.
+    Calls Gemini AI to classify a scam report.
+    Returns dict with scam_type, risk_score, reason, recommendation.
+    Falls back to safe defaults if API is unavailable.
     """
     if not GEMINI_AVAILABLE:
         return {
             "scam_type": "OTHER",
             "risk_score": 5,
-            "reason": "AI classification unavailable — no API key configured"
+            "reason": "AI classification unavailable — no API key configured",
+            "recommendation": "Do not share personal or financial information with unknown contacts"
         }
 
     try:
@@ -49,6 +52,7 @@ def classify_scam(description: str) -> dict:
         response = GEMINI_MODEL.generate_content(prompt)
         text = response.text.strip()
 
+        # Strip markdown code fences if Gemini adds them
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"):
@@ -58,7 +62,18 @@ def classify_scam(description: str) -> dict:
 
     except json.JSONDecodeError:
         logger.warning("Gemini returned non-JSON response")
-        return {"scam_type": "OTHER", "risk_score": 5, "reason": "AI could not parse the report clearly"}
+        return {
+            "scam_type": "OTHER",
+            "risk_score": 5,
+            "reason": "AI could not clearly classify this report",
+            "recommendation": "Report this to cybercrime.gov.in or call 1930"
+        }
     except Exception as e:
         logger.error(f"Gemini error: {e}")
-        return {"scam_type": "OTHER", "risk_score": 3, "reason": "AI classification failed"}
+        return {
+            "scam_type": "OTHER",
+            "risk_score": 3,
+            "reason": "AI classification failed",
+            "recommendation": "Do not share personal or financial information"
+        }
+    
