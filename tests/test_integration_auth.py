@@ -1,6 +1,5 @@
 """
 INTEGRATION TESTS — Auth routes
-Tests: /auth/register and /auth/login end-to-end via HTTP
 """
 import pytest
 
@@ -47,8 +46,8 @@ class TestRegister:
 class TestLogin:
 
     def test_login_success(self, client, regular_user):
-        res = client.post("/auth/login", json={
-            "email": "user@test.com",
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
             "password": "password123"
         })
         assert res.status_code == 200
@@ -58,8 +57,9 @@ class TestLogin:
         assert data["role"] == "user"
 
     def test_login_returns_user_info(self, client, regular_user):
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "password123"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "password123"
         })
         data = res.json()
         assert "user_id" in data
@@ -67,37 +67,42 @@ class TestLogin:
         assert data["name"] == "Test User"
 
     def test_login_wrong_password(self, client, regular_user):
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "wrongpass"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "wrongpass"
         })
         assert res.status_code == 401
 
     def test_login_wrong_email(self, client):
-        res = client.post("/auth/login", json={
-            "email": "nobody@test.com", "password": "pass"
+        res = client.post("/auth/login", data={
+            "username": "nobody@test.com",
+            "password": "pass"
         })
         assert res.status_code == 401
 
     def test_login_deactivated_user(self, client, db, regular_user):
         regular_user.is_active = False
         db.commit()
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "password123"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "password123"
         })
         assert res.status_code == 403
 
     def test_login_token_is_valid_jwt(self, client, regular_user):
         from jose import jwt
         from app.core.config import settings
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "password123"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "password123"
         })
         token = res.json()["access_token"]
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         assert payload["user_id"] == regular_user.id
 
     def test_admin_login_returns_admin_role(self, client, admin_user):
-        res = client.post("/auth/login", json={
-            "email": "admin@test.com", "password": "adminpass"
+        res = client.post("/auth/login", data={
+            "username": "admin@test.com",
+            "password": "adminpass"
         })
         assert res.json()["role"] == "admin"

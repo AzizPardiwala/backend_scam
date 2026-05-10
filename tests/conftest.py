@@ -1,9 +1,3 @@
-"""
-conftest.py — shared fixtures for ALL tests (unit + integration)
-
-Uses an in-memory SQLite database so no Render/PostgreSQL needed.
-Every test gets a clean database — no leftover data between tests.
-"""
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -13,9 +7,11 @@ from app.core.database import Base, get_db
 from app.core.security import hash_password, create_access_token
 from app.models.user import User
 from app.models.scam_report import ScamReport
+from app.models.submission import ScamSubmission
+from app.models.ai_report import AIReport
 from app.main import app
 
-# ── In-memory SQLite DB (no external DB needed) ──────────────────────────────
+# ── In-memory SQLite DB ───────────────────────────────────────────────────────
 SQLITE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
@@ -33,7 +29,6 @@ def override_get_db():
         db.close()
 
 
-# Override the real DB with test SQLite DB
 app.dependency_overrides[get_db] = override_get_db
 
 
@@ -65,7 +60,6 @@ def client():
 
 @pytest.fixture
 def regular_user(db):
-    """A normal user already in the DB."""
     user = User(
         email="user@test.com",
         password=hash_password("password123"),
@@ -80,7 +74,6 @@ def regular_user(db):
 
 @pytest.fixture
 def admin_user(db):
-    """An admin user already in the DB."""
     user = User(
         email="admin@test.com",
         password=hash_password("adminpass"),
@@ -95,13 +88,11 @@ def admin_user(db):
 
 @pytest.fixture
 def user_token(regular_user):
-    """JWT token for the regular user."""
     return create_access_token({"user_id": regular_user.id, "role": "user"})
 
 
 @pytest.fixture
 def admin_token(admin_user):
-    """JWT token for the admin user."""
     return create_access_token({"user_id": admin_user.id, "role": "admin"})
 
 
@@ -117,7 +108,8 @@ def admin_headers(admin_token):
 
 @pytest.fixture
 def sample_report(db, regular_user):
-    """A scam report already in the DB."""
+    """Old ScamReport fixture — kept for backward compat with admin tests."""
+    from app.models.scam_report import ScamReport
     report = ScamReport(
         user_id=regular_user.id,
         message="Someone called me saying I won a lottery and asked for my bank details",
@@ -131,7 +123,8 @@ def sample_report(db, regular_user):
 
 @pytest.fixture
 def verified_report(db, regular_user):
-    """A fully verified scam report."""
+    """Old ScamReport fixture — kept for backward compat with admin tests."""
+    from app.models.scam_report import ScamReport
     report = ScamReport(
         user_id=regular_user.id,
         message="Fake job offer asking for registration fee of 5000 rupees",
@@ -146,3 +139,46 @@ def verified_report(db, regular_user):
     db.commit()
     db.refresh(report)
     return report
+
+
+@pytest.fixture
+def sample_submission(db, regular_user):
+    """New ScamSubmission fixture for submission tests."""
+    sub = ScamSubmission(
+        user_id=regular_user.id,
+        message="Someone called me saying I won a lottery",
+        status="PENDING"
+    )
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return sub
+
+
+@pytest.fixture
+def reviewed_submission(db, regular_user):
+    """A submission that has been reviewed with an AI report."""
+    sub = ScamSubmission(
+        user_id=regular_user.id,
+        message="Fake job offer asking for money",
+        status="REVIEWED"
+    )
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+
+    report = AIReport(
+        submission_id=sub.id,
+        prediction="SCAM",
+        confidence=0.95,
+        scam_type="JOB_SCAM",
+        risk_score=8,
+        reason="Classic advance fee job scam",
+        recommendation="Do not pay any registration fee",
+        generated_by="AI",
+        status="PUBLISHED"
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return sub

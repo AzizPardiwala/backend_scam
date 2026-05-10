@@ -122,7 +122,8 @@ class TestAdminUsers:
 
     def test_deactivated_user_cannot_login(self, client, admin_headers, regular_user, db):
         client.post(f"/admin/users/{regular_user.id}/deactivate", headers=admin_headers)
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "password123"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "password123"
         })
         assert res.status_code == 403

@@ -60,8 +60,9 @@ class TestUserProfile:
 
     def test_deleted_user_cannot_login(self, client, user_headers):
         client.delete("/user/delete", headers=user_headers)
-        res = client.post("/auth/login", json={
-            "email": "user@test.com", "password": "password123"
+        res = client.post("/auth/login", data={
+            "username": "user@test.com",
+            "password": "password123"
         })
         assert res.status_code == 403
 
