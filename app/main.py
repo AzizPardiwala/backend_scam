@@ -1,20 +1,23 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.database import Base, engine
 from app.core.logger import logger
+from app.core.config import settings
 
 # Import ALL models so SQLAlchemy creates their tables on startup
 from app.models.user import User
-from app.models.scam_report import ScamReport       # kept for backward compat
+from app.models.scam_report import ScamReport
 from app.models.submission import ScamSubmission
 from app.models.ai_report import AIReport
 
 # Routers
 from app.routes import auth, user, admin
 from app.routes import submissions, ai_reports
-from app.routes import reports                       # public feed (kept)
+from app.routes import reports
+from app.routes import google_auth
 
 
 @asynccontextmanager
@@ -47,6 +50,11 @@ Report, validate, and track online scams using ML + Gemini AI.
 5. **User** can view their report → `GET /submissions/{id}/report`
 6. **Admin** can edit, override, publish, or reject reports
 
+### Authentication
+- Register with email/password → `POST /auth/register`
+- Login with email/password → `POST /auth/login`
+- Login with Google → `GET /auth/google`
+
 ### Two separate APIs
 | API | Who manages it | Purpose |
 |-----|---------------|---------|
@@ -63,6 +71,10 @@ Report, validate, and track online scams using ML + Gemini AI.
     redoc_url="/redoc"
 )
 
+# ── Middleware ─────────────────────────────────────────────────
+# Session middleware must come before CORS
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,11 +85,12 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────
 app.include_router(auth.router)
+app.include_router(google_auth.router)
 app.include_router(user.router)
 app.include_router(admin.router)
 app.include_router(submissions.router)
 app.include_router(ai_reports.router)
-app.include_router(reports.router)      # public feed — kept for backward compat
+app.include_router(reports.router)
 
 
 @app.get("/", tags=["Default"])
