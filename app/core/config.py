@@ -9,6 +9,7 @@ class Settings:
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_HOURS: int = 24
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")

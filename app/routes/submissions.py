@@ -1,35 +1,34 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.core.database import get_db, SessionLocal
+from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.submission import ScamSubmission
 from app.models.ai_report import AIReport
 from app.schemas.submission_schema import SubmissionCreate, SubmissionUpdate, SubmissionResponse
 from app.schemas.ai_report_schema import AIReportResponse
-from app.services.background_tasks import process_submission
+from app.tasks.scam_tasks import process_submission_task
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
 
 # ─────────────────────────────────────────────────────────────
-# POST /submissions
+# POST /submissions/
 # User submits a scam report.
 # SYNCHRONOUS  → saves to DB instantly, returns 202
-# ASYNCHRONOUS → ML + Gemini run in background after response
+# ASYNCHRONOUS → Celery worker picks up task from Redis queue
 # ─────────────────────────────────────────────────────────────
 @router.post("/", response_model=SubmissionResponse, status_code=status.HTTP_202_ACCEPTED)
-async def create_submission(
+def create_submission(
     data: SubmissionCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
     """
     Submit a new scam report.
-    - Saves instantly (SYNCHRONOUS) → you get a response immediately.
-    - AI analysis runs in background (ASYNCHRONOUS) → check back later.
+    - Saves instantly (SYNCHRONOUS) → you get response immediately.
+    - AI analysis sent to Celery queue (ASYNCHRONOUS) → worker processes it.
     - Status starts as PENDING, becomes REVIEWED after AI finishes.
     """
     submission = ScamSubmission(
@@ -41,9 +40,8 @@ async def create_submission(
     db.commit()
     db.refresh(submission)
 
-    # Hand off to background — fresh DB session so request session can close
-    bg_db = SessionLocal()
-    background_tasks.add_task(process_submission, bg_db, submission.id, data.message)
+    # Send task to Redis queue — Celery worker picks it up
+    process_submission_task.delay(submission.id, data.message)
 
     return submission
 
@@ -86,20 +84,19 @@ def get_submission(
 # ─────────────────────────────────────────────────────────────
 # PUT /submissions/{id}
 # User edits their own submission.
-# Re-triggers AI analysis asynchronously.
+# Re-triggers AI analysis via Celery.
 # ─────────────────────────────────────────────────────────────
 @router.put("/{submission_id}", response_model=SubmissionResponse)
-async def update_submission(
+def update_submission(
     submission_id: int,
     data: SubmissionUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
     """
     Update submission text.
     - Resets status to PENDING.
-    - Re-runs AI analysis in background (ASYNCHRONOUS).
+    - Re-runs AI analysis via Celery queue.
     """
     sub = db.query(ScamSubmission).filter(
         ScamSubmission.id == submission_id,
@@ -108,15 +105,13 @@ async def update_submission(
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found or access denied")
 
-    # Update text and reset status for re-analysis
     sub.message = data.message
     sub.status = "PENDING"
     db.commit()
     db.refresh(sub)
 
-    # Re-run AI asynchronously
-    bg_db = SessionLocal()
-    background_tasks.add_task(process_submission, bg_db, sub.id, data.message)
+    # Send to Celery queue for re-analysis
+    process_submission_task.delay(sub.id, data.message)
 
     return sub
 
@@ -139,7 +134,7 @@ def delete_submission(
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found or access denied")
 
-    # Delete linked AI report first (foreign key)
+    # Delete linked AI report first
     db.query(AIReport).filter(AIReport.submission_id == submission_id).delete()
     db.delete(sub)
     db.commit()
@@ -157,10 +152,9 @@ def get_my_report(
     user=Depends(get_current_user)
 ):
     """
-    View the AI-generated report for your submission.
-    Returns 404 if AI hasn't finished yet (still PENDING).
+    View the AI report for your submission.
+    Returns 404 if AI has not finished yet.
     """
-    # Verify ownership first
     sub = db.query(ScamSubmission).filter(
         ScamSubmission.id == submission_id,
         ScamSubmission.user_id == user.id
